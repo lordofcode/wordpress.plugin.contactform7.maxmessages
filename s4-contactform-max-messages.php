@@ -105,38 +105,45 @@ class ContactForm7MaxMessages {
         $dummyItems = $dummyForm->additional_setting('s4u_max_reactions');
         if (count($dummyItems) > 0) {
             $maxReactions = intval($dummyItems[0]);
-            $reactionCount = 0;
-            $fieldForCounting = get_post_meta( $this->_FormOnThisPageId, $this->_COUNTFIELDKEY, true );
-            $args = array('channel' => $dummyForm->name(), 'post_status' => 'publish');
-            $reactions = Flamingo_Inbound_Message::find( $args );
-            if (is_array($reactions)) {
-                if ($fieldForCounting == '') {
-                    $reactionCount = count($reactions);
-                }
-                else {
-                    if ($this->_ShowConditionalMessage) {
-                        $this->_ConditionalAmountField = true;
-                    }
-                    for ($a=0; $a < count($reactions); $a++) {
-                        $count = intval(get_post_meta( $reactions[$a]->id, '_field_'.$fieldForCounting, true ));
-                        if ($count <= 0) $count = 1;
-                        $reactionCount += $count;                        
-                    }
-                    global $_POST;
-                    if (isset($_POST[$fieldForCounting])) {
-                        $count = intval($_POST[$fieldForCounting]);
-                        if ($count <= 0) $count = 1;
-                        // controle is op >=, daarom 1 eraf
-                        $count--;
-                        $reactionCount += $count;
-                    }
-                }
-            }
+            $reactionCount = $this->GetReactionCount($this->_FormOnThisPageId);
             if ($reactionCount >= $maxReactions) {
                 $result = true;
             }
         }    
         return $result;
+    }
+
+    private function GetReactionCount($form) {
+        $reactionCount = 0;
+        $dummyForm = WPCF7_ContactForm::get_instance($form);
+
+        $fieldForCounting = get_post_meta( $form, $this->_COUNTFIELDKEY, true );
+        $args = array('channel' => $dummyForm->name(), 'post_status' => 'publish');
+        $reactions = Flamingo_Inbound_Message::find( $args );
+        if (is_array($reactions)) {
+            if ($fieldForCounting == '') {
+                $reactionCount = count($reactions);
+            }
+            else {
+                if ($this->_ShowConditionalMessage) {
+                    $this->_ConditionalAmountField = true;
+                }
+                for ($a=0; $a < count($reactions); $a++) {
+                    $count = intval(get_post_meta( $reactions[$a]->id, '_field_'.$fieldForCounting, true ));
+                    if ($count <= 0) $count = 1;
+                    $reactionCount += $count;                        
+                }
+                global $_POST;
+                if (isset($_POST[$fieldForCounting])) {
+                    $count = intval($_POST[$fieldForCounting]);
+                    if ($count <= 0) $count = 1;
+                    // controle is op >=, daarom 1 eraf
+                    $count--;
+                    $reactionCount += $count;
+                }
+            }
+        }
+        return $reactionCount;
     }
 
     public function SetCountField($form, $field) {
@@ -188,6 +195,7 @@ for ($m=0; $m < count($contactForms); $m++) {
     }
     else {
         echo "Maximum ingesteld op: ".$maximumAmount[0]." reactie(s)/aanmelding(en).<br/>";
+        echo "Reeds ontvangen aanmeldingen: " . $this->GetReactionCount($contactForms[$m]->ID) . "<br/>";
     }
     $formTags = $dummyForm->scan_form_tags();
     if (count($formTags) == 0) {
