@@ -13,7 +13,13 @@ Author URI: https://solution4u.nl/
 */
 class ContactForm7MaxMessages {
 
+    private $_COUNTFIELDKEY = 's4u_cfmax_field';
+
     private $_FormOnThisPageId = 0;
+
+    private $_ConditionalAmountField = false;
+
+    private $_ShowConditionalMessage = false;
 
     function __construct() {
         add_filter( 'the_content', array($this, 'Loaded') );
@@ -27,7 +33,12 @@ class ContactForm7MaxMessages {
     }
 
     private function GetMessage() {
-        return "Het is niet meer mogelijk te reageren/in te schrijven.";
+        if ($this->_ConditionalAmountField) {
+            return "Het is niet meer mogelijk om dit aantal personen in te schrijven.";
+        }
+        else{
+            return "Het is niet meer mogelijk te reageren/in te schrijven.";
+        }
     }
     
     public function Loaded($content) {
@@ -71,6 +82,7 @@ class ContactForm7MaxMessages {
             $idCheck = preg_match_all('/\/([0-9]+)\//', $_GET['rest_route'], $idmatch);
             if (is_array($idmatch)) {
                 if (count($idmatch >= 2)) {
+                    $this->_ShowConditionalMessage = true;
                     $this->SetFormOnPage(intval($idmatch[1][0]));  
                 }
             }
@@ -94,10 +106,31 @@ class ContactForm7MaxMessages {
         if (count($dummyItems) > 0) {
             $maxReactions = intval($dummyItems[0]);
             $reactionCount = 0;
+            $fieldForCounting = get_post_meta( $this->_FormOnThisPageId, $this->_COUNTFIELDKEY, true );
             $args = array('channel' => $dummyForm->name(), 'post_status' => 'publish');
             $reactions = Flamingo_Inbound_Message::find( $args );
             if (is_array($reactions)) {
-                $reactionCount = count($reactions);
+                if ($fieldForCounting == '') {
+                    $reactionCount = count($reactions);
+                }
+                else {
+                    if ($this->_ShowConditionalMessage) {
+                        $this->_ConditionalAmountField = true;
+                    }
+                    for ($a=0; $a < count($reactions); $a++) {
+                        $count = intval(get_post_meta( $reactions[$a]->id, '_field_'.$fieldForCounting, true ));
+                        if ($count <= 0) $count = 1;
+                        $reactionCount += $count;                        
+                    }
+                    global $_POST;
+                    if (isset($_POST[$fieldForCounting])) {
+                        $count = intval($_POST[$fieldForCounting]);
+                        if ($count <= 0) $count = 1;
+                        // controle is op >=, daarom 1 eraf
+                        $count--;
+                        $reactionCount += $count;
+                    }
+                }
             }
             if ($reactionCount >= $maxReactions) {
                 $result = true;
@@ -106,7 +139,89 @@ class ContactForm7MaxMessages {
         return $result;
     }
 
+    public function SetCountField($form, $field) {
+        $formToUpdate = intval($form);
+        $contactForm = get_posts(array('page_id' => $formToUpdate, 'post_type' => 'wpcf7_contact_form'));
+        if (count($contactForm) == 1) {
+            $dummyForm = WPCF7_ContactForm::get_instance($formToUpdate);
+            $formTags = $dummyForm->scan_form_tags();
+            $saveValue = '';
+            for ($z=0; $z < count($formTags); $z++) {
+                if ( $formTags[$z]->name == $field ) {
+                    $saveValue = $field;
+                }
+            }
+            update_post_meta($formToUpdate, $this->_COUNTFIELDKEY, $saveValue);            
+        }
+    }
+
+    public function show_admin_settings() {
+        if (is_admin() == false) {
+            exit;
+        }
+
+        if (isset($_POST['admin_action'])) {
+            if ($_POST['admin_action'] == 's4u_cf_max_setfield') {
+                $this->setCountField($_POST['form_id'], $_POST['field']);
+            }
+        }
+?>
+<h1>Configuratie</h1>
+<p>Door bij een ContactForm 7 formulier op het tabblad "Additional Settings" de waarde<br/>
+<blockquote><b><cite>s4u_max_reactions:1</cite></b></blockquote> toe te voegen, zorg je dat er maximaal 1 reactie/aanmelding uitgevoerd kan worden.<br/>
+Door de waarde aan te passen kun je zelf het maximum bepalen.<br/>
+<br/>
+Elk ingezonden formulier geldt als <b>1</b> reactie/aanmelding.<br/>
+Maar als je nu in &eacute;&eacute;n aanmelding meerdere personen kunt aanmelden?<br/>
+Dan kun je hier het veld selecteren en wordt dat gebruikt om het totaal te berekenen.
+</p>
+<?php
+$contactForms = get_posts(array('nopaging' => true, 'post_type' => 'wpcf7_contact_form'));
+for ($m=0; $m < count($contactForms); $m++) {
+?><hr/><form method="post"><input type="hidden" name="admin_action" value="s4u_cf_max_setfield"/><input type="hidden" name="form_id" value="<?php echo $contactForms[$m]->ID;?>" />
+<?php
+    echo "<h2><b>" . $contactForms[$m]->post_title . "</b></h2><br/>";
+    $dummyForm = WPCF7_ContactForm::get_instance($contactForms[$m]->ID);
+    $maximumAmount = $dummyForm->additional_setting('s4u_max_reactions');
+    if (count($maximumAmount) == 0) {
+        echo "Nog geen maximum ingesteld.<br/>";
+    }
+    else {
+        echo "Maximum ingesteld op: ".$maximumAmount[0]." reactie(s)/aanmelding(en).<br/>";
+    }
+    $formTags = $dummyForm->scan_form_tags();
+    if (count($formTags) == 0) {
+        echo "Geen velden op dit formulier toegevoegd.<br/>Bij opslaan wordt het aantal inzendingen geteld en dus NIET een veld.<br/>";
+    }
+    else{
+        $currentValue = get_post_meta( $contactForms[$m]->ID, $this->_COUNTFIELDKEY, true );
+?><br/><select name="field">
+<option value="">Standaard: tel aantal inzendingen</option>
+<?php 
+    for ($z=0; $z < count($formTags); $z++) {
+        $name = $formTags[$z]->name;
+        if ($name == '') continue;
+        $sel = ($name == $currentValue ? ' selected="selected" ' : '');        
+?><option value="<?php echo $name;?>" <?php echo $sel;?>>Veld: <?php echo $name;?></option><?php        
+    }
+?>
+</select>
+<?php
+    }
+?><input type="submit" value="Opslaan" />
+</form>
+<hr/>
+<?php
+}
+
+    }    
+
+    function add_admin_menu_action() {
+        add_options_page( 'Maximum aantal per formulier', 'Contactform Max Messages', 'administrator', __FILE__, array($this, 'show_admin_settings'), 1 );
+    }
+
 }
 
 $dummy = new ContactForm7MaxMessages();
+add_action('admin_menu', array($dummy, 'add_admin_menu_action'));
 ?>
