@@ -78,6 +78,7 @@ class ContactForm7MaxMessages {
 
     public function SubmitValidate($result, $tag) {
         global $_GET;
+        global $_POST;
         if (isset($_GET['rest_route'])) {
             $idCheck = preg_match_all('/\/([0-9]+)\//', $_GET['rest_route'], $idmatch);
             if (is_array($idmatch)) {
@@ -85,6 +86,13 @@ class ContactForm7MaxMessages {
                     $this->_ShowConditionalMessage = true;
                     $this->SetFormOnPage(intval($idmatch[1][0]));  
                 }
+            }
+        }
+        else if (isset($_POST['_wpcf7'])) {
+            $cfId = intval($_POST['_wpcf7']);
+            if ($cfId > 0) {
+                $this->_ShowConditionalMessage = true;
+                $this->SetFormOnPage($cfId);
             }
         }
         $maxReached = $this->HasReachedMaxMessages();
