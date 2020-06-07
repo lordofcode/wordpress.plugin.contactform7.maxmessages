@@ -25,7 +25,9 @@ class ContactForm7MaxMessages {
         add_filter( 'the_content', array($this, 'Loaded') );
 
         // a form MUST have at least one text-field
-        add_filter( 'wpcf7_validate_text', array($this, 'SubmitValidate'), 10, 2 );
+        add_filter( 'wpcf7_validate_text', array($this, 'SubmitValidate'), 999, 2 );
+        add_filter( 'wpcf7_validate_text*', array($this, 'SubmitValidate'), 999, 2 );
+        
     }
 
     function SetFormOnPage($id) {
@@ -65,7 +67,7 @@ class ContactForm7MaxMessages {
                         }
                     }
                     if (($isContactForm) && ($this->_FormOnThisPageId > 0)) {
-                        $maxReached = $this->HasReachedMaxMessages();
+                        $maxReached = $this->HasReachedMaxMessages(false);
                         if ($maxReached) {
                             $content = str_replace($fullMatch, $this->GetMessage(), $content);
                         }
@@ -95,14 +97,14 @@ class ContactForm7MaxMessages {
                 $this->SetFormOnPage($cfId);
             }
         }
-        $maxReached = $this->HasReachedMaxMessages();
+        $maxReached = $this->HasReachedMaxMessages(true);
         if ($maxReached) {
             $result->invalidate( $tag, $this->GetMessage() );
         }
         return $result;
     }
 
-    private function HasReachedMaxMessages() {
+    private function HasReachedMaxMessages($submitValidation) {
         $result = false;
         if ($this->_FormOnThisPageId == 0) return false;
 
@@ -113,15 +115,23 @@ class ContactForm7MaxMessages {
         $dummyItems = $dummyForm->additional_setting('s4u_max_reactions');
         if (count($dummyItems) > 0) {
             $maxReactions = intval($dummyItems[0]);
-            $reactionCount = $this->GetReactionCount($this->_FormOnThisPageId);
-            if ($reactionCount >= $maxReactions) {
-                $result = true;
+            $reactionCount = $this->GetReactionCount($this->_FormOnThisPageId, $submitValidation);
+            if ($submitValidation) {
+                $reactionCount += $this->GetReactionCountOfThisSubmit($this->_FormOnThisPageId);
+                if ($reactionCount > $maxReactions) {
+                    $result = true;
+                }
             }
-        }    
+            else{
+                if ($reactionCount >= $maxReactions) {
+                    $result = true;
+                }
+            }
+        }
         return $result;
     }
-
-    private function GetReactionCount($form) {
+  
+    private function GetReactionCount($form, $submitValidation) {
         $reactionCount = 0;
         $dummyForm = WPCF7_ContactForm::get_instance($form);
 
@@ -141,18 +151,29 @@ class ContactForm7MaxMessages {
                     if ($count <= 0) $count = 1;
                     $reactionCount += $count;                        
                 }
-                global $_POST;
-                if (isset($_POST[$fieldForCounting])) {
-                    $count = intval($_POST[$fieldForCounting]);
-                    if ($count <= 0) $count = 1;
-                    // controle is op >=, daarom 1 eraf
-                    $count--;
-                    $reactionCount += $count;
-                }
             }
         }
         return $reactionCount;
     }
+
+    private function GetReactionCountOfThisSubmit($form) {
+        $reactionCount = 0;
+        $dummyForm = WPCF7_ContactForm::get_instance($form);
+
+        $fieldForCounting = get_post_meta( $form, $this->_COUNTFIELDKEY, true );
+        if ($fieldForCounting == '') {
+            $reactionCount++;
+        }
+        else {
+            global $_POST;
+            if (isset($_POST[$fieldForCounting])) {
+                $count = intval($_POST[$fieldForCounting]);
+                if ($count <= 0) $count = 1;
+                $reactionCount += $count;
+            }     
+        }   
+        return $reactionCount;
+    }    
 
     public function SetCountField($form, $field) {
         $formToUpdate = intval($form);
@@ -203,7 +224,7 @@ for ($m=0; $m < count($contactForms); $m++) {
     }
     else {
         echo "Maximum ingesteld op: ".$maximumAmount[0]." reactie(s)/aanmelding(en).<br/>";
-        echo "Reeds ontvangen aanmeldingen: " . $this->GetReactionCount($contactForms[$m]->ID) . "<br/>";
+        echo "Reeds ontvangen aanmeldingen: " . $this->GetReactionCount($contactForms[$m]->ID, false) . "<br/>";
     }
     $formTags = $dummyForm->scan_form_tags();
     if (count($formTags) == 0) {
