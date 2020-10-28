@@ -136,6 +136,7 @@ class ContactForm7MaxMessages {
         $dummyForm = WPCF7_ContactForm::get_instance($form);
 
         $fieldForCounting = get_post_meta( $form, $this->_COUNTFIELDKEY, true );
+        $args = array('channel' => $dummyForm->name(), 'post_status' => 'publish', 'posts_per_page' => 100);
         $reactions = Flamingo_Inbound_Message::find( $args );
         if (is_array($reactions)) {
             if ($fieldForCounting == '') {
