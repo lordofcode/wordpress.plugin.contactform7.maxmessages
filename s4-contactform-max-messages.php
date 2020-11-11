@@ -108,8 +108,8 @@ class ContactForm7MaxMessages {
         $result = false;
         if ($this->_FormOnThisPageId == 0) return false;
 
-        if (class_exists(WPCF7_ContactForm) == false) return false;
-        if (class_exists(Flamingo_Inbound_Message) == false) return false;
+        if (class_exists('WPCF7_ContactForm') == false) return false;
+        if (class_exists('Flamingo_Inbound_Message') == false) return false;
 
         $dummyForm = WPCF7_ContactForm::get_instance($this->_FormOnThisPageId);
         $dummyItems = $dummyForm->additional_setting('s4u_max_reactions');
