@@ -36,10 +36,10 @@ class ContactForm7MaxMessages {
 
     private function GetMessage() {
         if ($this->_ConditionalAmountField) {
-            return "Het is niet meer mogelijk om dit aantal personen in te schrijven.";
+            return "Het is niet meer mogelijk om dit aantal personen in te schrijven.<br/>";
         }
         else{
-            return "Het is niet meer mogelijk te reageren/in te schrijven.";
+            return "Het is niet meer mogelijk te reageren/in te schrijven.<br/>";
         }
     }
     
@@ -69,7 +69,14 @@ class ContactForm7MaxMessages {
                     if (($isContactForm) && ($this->_FormOnThisPageId > 0)) {
                         $maxReached = $this->HasReachedMaxMessages(false);
                         if ($maxReached) {
-                            $content = str_replace($fullMatch, $this->GetMessage(), $content);
+                            if (is_array($fullMatch))
+                            {
+                                $content = str_replace($fullMatch[0], $this->GetMessage(), $content);
+                            }
+                            else
+                            {
+                                $content = str_replace($fullMatch, $this->GetMessage(), $content);
+                            }
                         }
                     }
                 }
